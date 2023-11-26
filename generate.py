@@ -1,5 +1,6 @@
 from queue import Queue
 import sys
+from copy import deepcopy
 
 from crossword import *
 
@@ -126,7 +127,7 @@ class CrosswordCreator:
         if overlap is None:
             return False
         x_ind, y_ind = overlap
-        for x_word in self.domains[x]:
+        for x_word in deepcopy(self.domains[x]):
             match = False
             for y_word in self.domains[y]:
                 if x_word[x_ind] == y_word[y_ind]:
@@ -147,7 +148,7 @@ class CrosswordCreator:
         return False if one or more domains end up empty.
         """
         if not arcs:
-            arcs = Queue(len(self.crossword.overlaps))
+            arcs = Queue(0)
             for arc in self.crossword.overlaps:
                 arcs.put(arc)
 
@@ -180,17 +181,20 @@ class CrosswordCreator:
         if len(set(assignment.values())) != len(assignment.values()):
             return False
         # check that each assignment matches the variable length
-        for var, word in assignment.values():
+        for var, word in assignment.items():
             if var.length != len(word):
                 return False
         # check that there are no conflicts between neighbors
-        for var1, var2 in self.crossword.overlaps:
-            word1, word2 = assignment[var1], assignment[var2]
-            index1, index2 = self.crossword.overlaps[var1, var2]
-            if (index1 > len(word1)) or (index2 > len(word2)):
-                return False
-            elif word1[index1] != word2[index2]:
-                return False
+        for var in assignment:
+            for neighbor in self.crossword.neighbors(var):
+                if neighbor not in assignment:
+                    continue
+                word1, word2 = assignment[var], assignment[neighbor]
+                index1, index2 = self.crossword.overlaps[var, neighbor]
+                if (index1 > len(word1)) or (index2 > len(word2)):
+                    return False
+                elif word1[index1] != word2[index2]:
+                    return False
         return True
 
     def order_domain_values(self, var, assignment):
@@ -215,7 +219,7 @@ class CrosswordCreator:
             if var not in assignment:
                 return var
 
-    def backtrack(self, assignment):
+    def backtrack(self, assignment: dict):
         """
         Using Backtracking Search, take as input a partial assignment for the
         crossword and return a complete assignment if possible to do so.
@@ -224,7 +228,19 @@ class CrosswordCreator:
 
         If no assignment is possible, return None.
         """
-        raise NotImplementedError
+        if self.assignment_complete(assignment):
+            return assignment
+        var = self.select_unassigned_variable(assignment)
+        for word in self.order_domain_values(var, assignment):
+            assignment[var] = word
+            if self.consistent(assignment):
+                saved_domain = deepcopy(self.domains)
+                if self.backtrack(assignment):
+                    return assignment
+                self.domains = saved_domain
+                self.domains[var].remove(word)
+            del assignment[var]
+        return None
 
 
 def main():
