@@ -1,6 +1,7 @@
 from queue import Queue
 import sys
 from copy import deepcopy
+from collections import defaultdict
 
 from crossword import *
 
@@ -177,6 +178,7 @@ class CrosswordCreator:
         Return True if `assignment` is consistent (i.e., words fit in crossword
         puzzle without conflicting characters); return False otherwise.
         """
+        # print(f"assignment={assignment}")
         # check for non-unique words
         if len(set(assignment.values())) != len(assignment.values()):
             return False
@@ -191,6 +193,9 @@ class CrosswordCreator:
                     continue
                 word1, word2 = assignment[var], assignment[neighbor]
                 index1, index2 = self.crossword.overlaps[var, neighbor]
+                # print(
+                # f"word1={word1},word2={word2},var={var},neighbor={neighbor}"
+                # )
                 if (index1 > len(word1)) or (index2 > len(word2)):
                     return False
                 elif word1[index1] != word2[index2]:
@@ -204,7 +209,33 @@ class CrosswordCreator:
         The first value in the list, for example, should be the one
         that rules out the fewest values among the neighbors of `var`.
         """
-        return self.domains[var]
+        # return self.domains[var]
+        word_tracker = {
+            d: 0 for d in self.domains[var]
+        }  # maps each word to the total number of neighboring values it rules out
+        # process each value in the domain of var
+        # print(f"var = {var}")
+        for word in self.domains[var]:
+            assignment[var] = word
+            # consider each neighbor of var
+            # print(f"neighbors={self.crossword.neighbors(var)}")
+            for neighbor in self.crossword.neighbors(var):
+                # print(f"neigh = {neighbor}")
+                if neighbor in assignment:
+                    continue
+                # process each value in the domain of neighbor
+                # print(f"self.domains[{neighbor}]={self.domains[neighbor]}")
+                for value in self.domains[neighbor]:
+                    # print(f"word={word},value={value}")
+                    assignment[neighbor] = value
+                    # print(f"pre-consistent: assignment={assignment}")
+                    if not self.consistent(assignment):
+                        # print(f"inc")
+                        word_tracker[word] += 1
+                    # print("s")
+                    del assignment[neighbor]
+            del assignment[var]
+        return sorted(word_tracker.keys(), key=lambda word: word_tracker[word])
 
     def select_unassigned_variable(self, assignment):
         """
@@ -214,10 +245,27 @@ class CrosswordCreator:
         degree. If there is a tie, any of the tied variables are acceptable
         return values.
         """
-        vars = self.crossword.variables
-        for var in vars:
-            if var not in assignment:
-                return var
+        var_values = {
+            var: len(self.domains[var])
+            for var in self.crossword.variables
+            if var not in assignment
+        }  # maps variables to the number of values they have remaining
+        mrv = min(var_values.values())  # get the MRV
+        mrv_vars = {
+            var for var in var_values if var_values[var] == mrv
+        }  # all the vars with the MRV
+        # precisely one var w/the MRV
+        if len(mrv_vars) == 1:
+            return mrv_vars.pop()
+        # more than one var w/the MRV, use the degree heuristic
+        highest_deg_var = None
+        for var in mrv_vars:
+            if (highest_deg_var is None) or (
+                self.crossword.neighbors(var)
+                > self.crossword.neighbors(highest_deg_var)
+            ):
+                highest_deg_var = var
+        return highest_deg_var
 
     def backtrack(self, assignment: dict):
         """
