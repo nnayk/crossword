@@ -1,3 +1,4 @@
+from queue import Queue
 import sys
 
 from crossword import *
@@ -8,7 +9,7 @@ class CrosswordCreator:
         """
         Create new CSP crossword generate.
         """
-        self.crossword = crossword
+        self.crossword: Crossword = crossword
         self.domains = {
             var: self.crossword.words.copy() for var in self.crossword.variables
         }
@@ -145,7 +146,22 @@ class CrosswordCreator:
         Return True if arc consistency is enforced and no domains are empty;
         return False if one or more domains end up empty.
         """
-        raise NotImplementedError
+        if not arcs:
+            arcs = Queue(len(self.crossword.overlaps))
+            for arc in self.crossword.overlaps:
+                arcs.put(arc)
+
+        while arcs.qsize():
+            var1, var2 = arcs.get()
+            # if a revision was made, check that domains are non-empty and update queue
+            if self.revise(var1, var2):
+                if (not self.domains[var1]) or (not self.domains[var2]):
+                    return False
+                for arc in self.crossword.overlaps:
+                    # only add new arcs
+                    if (arc[0] == var1) and (arc[1] != var2):
+                        arcs.put(arc)
+        return True
 
     def assignment_complete(self, assignment):
         """
